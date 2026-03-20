@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Pong PRO 2</title>
+<title>Pong PRO 3</title>
 
 <style>
 body {
   margin: 0;
-  background: radial-gradient(circle, #222, #000);
+  background: radial-gradient(circle, #111, #000);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -17,7 +17,7 @@ body {
 }
 
 canvas {
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,0,0.7);
   border: 2px solid cyan;
   box-shadow: 0 0 40px cyan;
 }
@@ -34,7 +34,7 @@ const ctx = canvas.getContext("2d");
 
 // ===== ESTADOS =====
 let state = "menu"; 
-// menu | controls | difficulty | playing | pause
+// menu | controls | difficulty | playing | pause | gameover
 
 let gameMode = "";
 let controlMode = "arrows";
@@ -43,6 +43,7 @@ let difficulty = "medium";
 // ===== PLACAR =====
 let p1Score = 0;
 let p2Score = 0;
+let winner = "";
 
 // ===== JOGADORES =====
 const p1 = { x: 10, y: 200, w: 10, h: 100, dy: 0 };
@@ -51,8 +52,9 @@ const p2 = { x: 780, y: 200, w: 10, h: 100, dy: 0 };
 // ===== BOLA =====
 const ball = { x: 400, y: 250, r: 10, dx: 5, dy: 3 };
 
-// rastro
+// ===== EFEITOS =====
 let trail = [];
+let particles = [];
 
 // ===== CONTROLES =====
 document.addEventListener("keydown", (e) => {
@@ -61,6 +63,21 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (state === "playing") state = "pause";
     else if (state === "pause") state = "playing";
+  }
+
+  if (state === "pause") {
+    if (e.key === "1") state = "playing";
+    if (e.key === "2") {
+      resetGame();
+      state = "menu";
+    }
+  }
+
+  if (state === "gameover") {
+    if (e.key === "Enter") {
+      resetGame();
+      state = "menu";
+    }
   }
 
   // MENU
@@ -98,31 +115,26 @@ document.addEventListener("keydown", (e) => {
 
   if (state === "playing") {
 
-    // PLAYER 1
     if (e.key === "w") p1.dy = -6;
     if (e.key === "s") p1.dy = 6;
 
-    // PLAYER 2
     if (gameMode === "pvp") {
       if (e.key === "ArrowUp") p2.dy = -6;
       if (e.key === "ArrowDown") p2.dy = 6;
     }
 
-    // IA controle
     if (gameMode === "ai") {
       if (controlMode === "arrows") {
         if (e.key === "ArrowUp") p1.dy = -6;
         if (e.key === "ArrowDown") p1.dy = 6;
       }
     }
-
   }
-
 });
 
 document.addEventListener("keyup", (e) => {
-  if (e.key === "w" || e.key === "s") p1.dy = 0;
-  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+  if (["w","s"].includes(e.key)) p1.dy = 0;
+  if (["ArrowUp","ArrowDown"].includes(e.key)) {
     p2.dy = 0;
     p1.dy = 0;
   }
@@ -136,14 +148,37 @@ function resetBall() {
   ball.dy = Math.random() * 4 - 2;
 }
 
+function resetGame() {
+  p1Score = 0;
+  p2Score = 0;
+  winner = "";
+  resetBall();
+}
+
 // ===== IA =====
 function moveAI() {
-  let speed = 0.08;
-  if (difficulty === "easy") speed = 0.05;
-  if (difficulty === "hard") speed = 0.12;
+  let base = 0.05;
+
+  if (difficulty === "medium") base = 0.08;
+  if (difficulty === "hard") base = 0.12;
+
+  // aumenta após 5 pontos
+  if (p2Score >= 5) base += 0.03;
 
   let target = ball.y - p2.h / 2;
-  p2.y += (target - p2.y) * speed;
+  p2.y += (target - p2.y) * base;
+}
+
+// ===== PARTÍCULAS =====
+function createParticles(x,y) {
+  for (let i=0;i<10;i++) {
+    particles.push({
+      x, y,
+      dx: Math.random()*4-2,
+      dy: Math.random()*4-2,
+      life: 20
+    });
+  }
 }
 
 // ===== UPDATE =====
@@ -153,7 +188,7 @@ function update() {
   p1.y += p1.dy;
   p2.y += p2.dy;
 
-  [p1, p2].forEach(p => {
+  [p1,p2].forEach(p=>{
     if (p.y < 0) p.y = 0;
     if (p.y + p.h > canvas.height)
       p.y = canvas.height - p.h;
@@ -166,22 +201,27 @@ function update() {
 
   if (ball.y < 0 || ball.y > canvas.height) {
     ball.dy *= -1;
+    createParticles(ball.x, ball.y);
   }
 
-  // colisões
   if (
     ball.x < p1.x + p1.w &&
     ball.y > p1.y &&
     ball.y < p1.y + p1.h
-  ) ball.dx *= -1.1;
+  ) {
+    ball.dx *= -1.1;
+    createParticles(ball.x, ball.y);
+  }
 
   if (
     ball.x > p2.x &&
     ball.y > p2.y &&
     ball.y < p2.y + p2.h
-  ) ball.dx *= -1.1;
+  ) {
+    ball.dx *= -1.1;
+    createParticles(ball.x, ball.y);
+  }
 
-  // pontos
   if (ball.x < 0) {
     p2Score++;
     resetBall();
@@ -192,77 +232,106 @@ function update() {
     resetBall();
   }
 
+  // vitória
+  if (p1Score >= 10) {
+    winner = "Jogador 1 venceu!";
+    state = "gameover";
+  }
+  if (p2Score >= 10) {
+    winner = gameMode === "ai" ? "IA venceu!" : "Jogador 2 venceu!";
+    state = "gameover";
+  }
+
   // rastro
-  trail.push({ x: ball.x, y: ball.y });
+  trail.push({x:ball.x,y:ball.y});
   if (trail.length > 10) trail.shift();
+
+  // partículas update
+  particles.forEach(p=>{
+    p.x += p.dx;
+    p.y += p.dy;
+    p.life--;
+  });
+  particles = particles.filter(p=>p.life>0);
 }
 
 // ===== DRAW =====
 function draw() {
-  ctx.fillStyle = "rgba(0,0,0,0.3)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle="rgba(0,0,0,0.3)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  ctx.fillStyle = "cyan";
-  ctx.font = "25px Arial";
+  ctx.fillStyle="cyan";
+  ctx.font="25px Arial";
 
-  if (state === "menu") {
-    ctx.fillText("PONG PRO 2", 260, 180);
-    ctx.fillText("1 - Jogar vs IA", 260, 240);
-    ctx.fillText("2 - 2 Jogadores", 260, 280);
+  if (state==="menu"){
+    ctx.fillText("PONG PRO 3",260,180);
+    ctx.fillText("1 - vs IA",300,240);
+    ctx.fillText("2 - 2 Jogadores",260,280);
     return;
   }
 
-  if (state === "controls") {
-    ctx.fillText("Escolha controle", 260, 200);
-    ctx.fillText("1 - WASD", 320, 250);
-    ctx.fillText("2 - Setas", 310, 290);
+  if (state==="controls"){
+    ctx.fillText("Escolha controle",260,200);
+    ctx.fillText("1 - WASD",320,250);
+    ctx.fillText("2 - Setas",310,290);
     return;
   }
 
-  if (state === "difficulty") {
-    ctx.fillText("Dificuldade", 300, 200);
-    ctx.fillText("1 - Fácil", 320, 250);
-    ctx.fillText("2 - Médio", 320, 290);
-    ctx.fillText("3 - Difícil", 310, 330);
+  if (state==="difficulty"){
+    ctx.fillText("Dificuldade",300,200);
+    ctx.fillText("1 Fácil",320,250);
+    ctx.fillText("2 Médio",320,290);
+    ctx.fillText("3 Difícil",310,330);
     return;
   }
 
-  if (state === "pause") {
-    ctx.fillText("PAUSADO", 320, 250);
-    ctx.fillText("ESC para voltar", 280, 300);
+  if (state==="pause"){
+    ctx.fillText("PAUSADO",320,200);
+    ctx.fillText("1 - Voltar",300,260);
+    ctx.fillText("2 - Menu",300,300);
     return;
   }
 
-  // rastro da bola
-  for (let i = 0; i < trail.length; i++) {
-    ctx.globalAlpha = i / trail.length;
+  if (state==="gameover"){
+    ctx.fillText(winner,260,250);
+    ctx.fillText("ENTER para voltar",240,300);
+    return;
+  }
+
+  // rastro
+  for (let i=0;i<trail.length;i++){
+    ctx.globalAlpha=i/trail.length;
     ctx.beginPath();
-    ctx.arc(trail[i].x, trail[i].y, ball.r, 0, Math.PI * 2);
+    ctx.arc(trail[i].x,trail[i].y,ball.r,0,Math.PI*2);
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha=1;
+
+  // partículas
+  particles.forEach(p=>{
+    ctx.fillRect(p.x,p.y,3,3);
+  });
 
   // bola
   ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
   ctx.fill();
 
   // jogadores
-  ctx.fillRect(p1.x, p1.y, p1.w, p1.h);
-  ctx.fillRect(p2.x, p2.y, p2.w, p2.h);
+  ctx.fillRect(p1.x,p1.y,p1.w,p1.h);
+  ctx.fillRect(p2.x,p2.y,p2.w,p2.h);
 
-  // linha do meio
-  for (let i = 0; i < canvas.height; i += 20) {
-    ctx.fillRect(395, i, 10, 10);
+  // linha
+  for (let i=0;i<canvas.height;i+=20){
+    ctx.fillRect(395,i,10,10);
   }
 
-  // placar
-  ctx.fillText(p1Score, 300, 50);
-  ctx.fillText(p2Score, 480, 50);
+  ctx.fillText(p1Score,300,50);
+  ctx.fillText(p2Score,480,50);
 }
 
 // ===== LOOP =====
-function loop() {
+function loop(){
   update();
   draw();
   requestAnimationFrame(loop);
