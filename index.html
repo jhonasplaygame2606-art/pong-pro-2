@@ -7,7 +7,7 @@
 <style>
 body {
   margin: 0;
-  background: linear-gradient(135deg, #111, #333);
+  background: radial-gradient(circle, #222, #000);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -17,9 +17,9 @@ body {
 }
 
 canvas {
-  background: #222;
-  border: 2px solid white;
-  box-shadow: 0 0 30px cyan;
+  background: rgba(0,0,0,0.6);
+  border: 2px solid cyan;
+  box-shadow: 0 0 40px cyan;
 }
 </style>
 </head>
@@ -34,9 +34,9 @@ const ctx = canvas.getContext("2d");
 
 // ===== ESTADOS =====
 let state = "menu"; 
-// menu | controls | difficulty | playing
+// menu | controls | difficulty | playing | pause
 
-let gameMode = ""; // ai ou pvp
+let gameMode = "";
 let controlMode = "arrows";
 let difficulty = "medium";
 
@@ -51,8 +51,17 @@ const p2 = { x: 780, y: 200, w: 10, h: 100, dy: 0 };
 // ===== BOLA =====
 const ball = { x: 400, y: 250, r: 10, dx: 5, dy: 3 };
 
+// rastro
+let trail = [];
+
 // ===== CONTROLES =====
 document.addEventListener("keydown", (e) => {
+
+  // PAUSE
+  if (e.key === "Escape") {
+    if (state === "playing") state = "pause";
+    else if (state === "pause") state = "playing";
+  }
 
   // MENU
   if (state === "menu") {
@@ -66,7 +75,6 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
-  // CONTROLES IA
   else if (state === "controls") {
     if (e.key === "1") {
       controlMode = "wasd";
@@ -78,7 +86,6 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
-  // DIFICULDADE
   else if (state === "difficulty") {
     if (e.key === "1") difficulty = "easy";
     if (e.key === "2") difficulty = "medium";
@@ -89,28 +96,23 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
-  // JOGO
   if (state === "playing") {
 
-    // PLAYER 1 (sempre WASD no PvP)
+    // PLAYER 1
     if (e.key === "w") p1.dy = -6;
     if (e.key === "s") p1.dy = 6;
 
-    // PLAYER 2 (setas no PvP)
+    // PLAYER 2
     if (gameMode === "pvp") {
       if (e.key === "ArrowUp") p2.dy = -6;
       if (e.key === "ArrowDown") p2.dy = 6;
     }
 
-    // MODO IA (controle configurável)
+    // IA controle
     if (gameMode === "ai") {
       if (controlMode === "arrows") {
         if (e.key === "ArrowUp") p1.dy = -6;
         if (e.key === "ArrowDown") p1.dy = 6;
-      }
-      if (controlMode === "wasd") {
-        if (e.key === "w") p1.dy = -6;
-        if (e.key === "s") p1.dy = 6;
       }
     }
 
@@ -119,17 +121,11 @@ document.addEventListener("keydown", (e) => {
 });
 
 document.addEventListener("keyup", (e) => {
-
   if (e.key === "w" || e.key === "s") p1.dy = 0;
-
   if (e.key === "ArrowUp" || e.key === "ArrowDown") {
     p2.dy = 0;
-
-    if (gameMode === "ai") {
-      p1.dy = 0;
-    }
+    p1.dy = 0;
   }
-
 });
 
 // ===== RESET =====
@@ -143,9 +139,7 @@ function resetBall() {
 // ===== IA =====
 function moveAI() {
   let speed = 0.08;
-
   if (difficulty === "easy") speed = 0.05;
-  if (difficulty === "medium") speed = 0.08;
   if (difficulty === "hard") speed = 0.12;
 
   let target = ball.y - p2.h / 2;
@@ -159,17 +153,14 @@ function update() {
   p1.y += p1.dy;
   p2.y += p2.dy;
 
-  // limites
   [p1, p2].forEach(p => {
     if (p.y < 0) p.y = 0;
     if (p.y + p.h > canvas.height)
       p.y = canvas.height - p.h;
   });
 
-  // IA
   if (gameMode === "ai") moveAI();
 
-  // bola
   ball.x += ball.dx;
   ball.y += ball.dy;
 
@@ -182,17 +173,13 @@ function update() {
     ball.x < p1.x + p1.w &&
     ball.y > p1.y &&
     ball.y < p1.y + p1.h
-  ) {
-    ball.dx *= -1.1;
-  }
+  ) ball.dx *= -1.1;
 
   if (
     ball.x > p2.x &&
     ball.y > p2.y &&
     ball.y < p2.y + p2.h
-  ) {
-    ball.dx *= -1.1;
-  }
+  ) ball.dx *= -1.1;
 
   // pontos
   if (ball.x < 0) {
@@ -204,17 +191,23 @@ function update() {
     p1Score++;
     resetBall();
   }
+
+  // rastro
+  trail.push({ x: ball.x, y: ball.y });
+  if (trail.length > 10) trail.shift();
 }
 
 // ===== DRAW =====
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  ctx.fillStyle = "cyan";
   ctx.font = "25px Arial";
 
   if (state === "menu") {
     ctx.fillText("PONG PRO 2", 260, 180);
-    ctx.fillText("1 - Jogar contra IA", 240, 240);
+    ctx.fillText("1 - Jogar vs IA", 260, 240);
     ctx.fillText("2 - 2 Jogadores", 260, 280);
     return;
   }
@@ -234,10 +227,20 @@ function draw() {
     return;
   }
 
-  // linha do meio
-  for (let i = 0; i < canvas.height; i += 20) {
-    ctx.fillRect(395, i, 10, 10);
+  if (state === "pause") {
+    ctx.fillText("PAUSADO", 320, 250);
+    ctx.fillText("ESC para voltar", 280, 300);
+    return;
   }
+
+  // rastro da bola
+  for (let i = 0; i < trail.length; i++) {
+    ctx.globalAlpha = i / trail.length;
+    ctx.beginPath();
+    ctx.arc(trail[i].x, trail[i].y, ball.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 
   // bola
   ctx.beginPath();
@@ -247,6 +250,11 @@ function draw() {
   // jogadores
   ctx.fillRect(p1.x, p1.y, p1.w, p1.h);
   ctx.fillRect(p2.x, p2.y, p2.w, p2.h);
+
+  // linha do meio
+  for (let i = 0; i < canvas.height; i += 20) {
+    ctx.fillRect(395, i, 10, 10);
+  }
 
   // placar
   ctx.fillText(p1Score, 300, 50);
